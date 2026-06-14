@@ -1,36 +1,80 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# תמלול הקלטות בעברית
 
-## Getting Started
+אפליקציית ווב עצמאית לתמלול הקלטות בעברית עם זיהוי דוברים — מחליפה את ה-workflow
+של N8N. בנויה ב-Next.js 16, AssemblyAI, Postgres (Neon) ו-Vercel Blob.
 
-First, run the development server:
+## זרימה
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```
+העלאה ישירה מהדפדפן → Vercel Blob ─┐
+                                    ├→ AssemblyAI (he + דוברים)
+Google Drive → השרת ──────────────┘        │ webhook / סנכרון בסיום
+                                            ▼
+                                    Postgres → ממשק צפייה
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- **העלאה**: הדפדפן מעלה את הקובץ **ישירות ל-Vercel Blob** (עם בר התקדמות),
+  עוקף את מגבלת ה-4.5MB של פונקציות serverless — תומך בקבצים גדולים.
+- **סיום תמלול**: AssemblyAI שולח webhook ל-`/api/webhook`. בנוסף יש **סנכרון
+  fallback** שמושך סטטוס ישירות מ-AssemblyAI (עובד גם מקומית בלי כתובת ציבורית).
+- **מחיקה**: מוחקת את הרשומה ואת הקובץ מ-Blob.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## הקמה
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. **התקנת תלויות:**
+   ```bash
+   npm install
+   ```
 
-## Learn More
+2. **משתני סביבה** — העתיקו את `.env.example` ל-`.env.local` ומלאו:
+   - `DATABASE_URL` — Neon Postgres (https://neon.tech או Vercel Marketplace)
+   - `ASSEMBLYAI_API_KEY` — https://www.assemblyai.com/app/account
+   - `BLOB_READ_WRITE_TOKEN` — נמשך אוטומטית עם
+     `vercel blob create-store <name> --access public --yes`
+   - `APP_URL` — כתובת ציבורית ל-webhook (בפיתוח: ngrok; בפרודקשן: כתובת Vercel)
+   - `WEBHOOK_SECRET` — מחרוזת אקראית
+   - (אופציונלי) `GOOGLE_SERVICE_ACCOUNT_JSON` או `GOOGLE_API_KEY` ל-Drive
 
-To learn more about Next.js, take a look at the following resources:
+3. **יצירת הטבלה ב-DB:**
+   ```bash
+   npm run db:push
+   ```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+4. **הרצה:**
+   ```bash
+   npm run dev
+   ```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## הערה חשובה על ה-Webhook בפיתוח מקומי
 
-## Deploy on Vercel
+AssemblyAI צריך לקרוא ל-`APP_URL/api/webhook` מהאינטרנט. ב-localhost זה לא נגיש,
+לכן בפיתוח הריצו טאנל (למשל `ngrok http 3000`) והגדירו את ה-URL שלו כ-`APP_URL`.
+בפרודקשן על Vercel — הכתובת נגישה אוטומטית.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## מבנה
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| נתיב | תיאור |
+|------|-------|
+| `src/app/page.tsx` | עמוד הבית — העלאה/Drive + רשימה |
+| `src/app/transcriptions/[id]/page.tsx` | עמוד צפייה בתמלול |
+| `src/app/api/transcriptions/` | יצירה (POST), רשימה (GET), פריט, retry |
+| `src/app/api/drive/route.ts` | שליפה מ-Google Drive |
+| `src/app/api/webhook/route.ts` | קבלת סיום מ-AssemblyAI |
+| `src/lib/service.ts` | לוגיקה משותפת (יצירה, התחלה, webhook) |
+| `src/lib/transcription/` | אבסטרקציית ספק התמלול (קל להחליף ל-Whisper/ElevenLabs) |
+| `src/lib/drive.ts` | הורדה מ-Google Drive |
+| `src/lib/schema.ts` | סכמת בסיס הנתונים (Drizzle) |
+
+## החלפת ספק תמלול
+
+הספק הפעיל מוגדר ב-`src/lib/transcription/index.ts`. כדי לעבור ל-ElevenLabs Scribe
+או Whisper — יישמו את ממשק `TranscriptionProvider` (`src/lib/transcription/types.ts`)
+ושנו את ה-export. שאר הקוד לא משתנה.
+
+## פריסה ל-Vercel
+
+```bash
+vercel
+```
+חברו Neon ו-Blob דרך ה-Marketplace, הגדירו את משתני הסביבה, ו-`APP_URL` יהיה כתובת
+הפרודקשן. הריצו `npm run db:push` מול ה-DATABASE_URL של הפרודקשן.
