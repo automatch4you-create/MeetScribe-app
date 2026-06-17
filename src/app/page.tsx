@@ -1,15 +1,23 @@
 ﻿"use client";
 
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SourcePicker } from "@/components/SourcePicker";
 import { TranscriptionList } from "@/components/TranscriptionList";
 import type { TranscriptionDTO } from "@/lib/api-types";
 
 export default function Home() {
+  const router = useRouter();
   const [items, setItems] = useState<TranscriptionDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  async function logout() {
+    await fetch("/api/logout", { method: "POST" });
+    router.replace("/login");
+    router.refresh();
+  }
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
@@ -44,6 +52,15 @@ export default function Home() {
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10">
+      <div className="mb-2 flex justify-start">
+        <button
+          onClick={logout}
+          className="text-xs text-slate-400 transition hover:text-slate-700"
+        >
+          התנתקות
+        </button>
+      </div>
+
       <header className="mb-8 flex flex-col items-center text-center">
         <Image
           src="/meetscribe-wide.png"
